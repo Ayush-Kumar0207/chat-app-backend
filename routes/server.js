@@ -1,4 +1,4 @@
-const express = require('express');
+const express = require('express'); 
 const http = require('http');
 const socketIo = require('socket.io');
 const mongoose = require('mongoose');
@@ -14,7 +14,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: 'http://localhost:3000', // Frontend origin
+    origin: 'http://localhost:3000', // Update to your frontend URL on Render if deployed
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -24,6 +24,11 @@ const io = socketIo(server, {
 app.use(cors());
 app.use(express.json());
 app.use('/api/auth', authRoutes);
+
+// ✅ Add root route to avoid "Cannot GET /"
+app.get('/', (req, res) => {
+  res.send('✅ Chat App Backend is running!');
+});
 
 // Connect to MongoDB
 mongoose
