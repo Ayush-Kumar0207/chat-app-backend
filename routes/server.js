@@ -1,4 +1,4 @@
-const express = require('express');
+const express = require('express'); 
 const http = require('http');
 const socketIo = require('socket.io');
 const mongoose = require('mongoose');
@@ -13,59 +13,46 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-const io = socketIo(server, {
-  cors: {
-    origin: [
-      'http://localhost:3000',
-      'https://chat-app-frontend.onrender.com', // ✅ Replace with your actual frontend Render URL
-    ],
-    methods: ['GET', 'POST'],
-    credentials: true,
-  },
-});
-
-// ✅ Enable CORS for both local and deployed frontend
-app.use(cors({
+// ✅ CORS configuration to allow Netlify frontend
+const corsOptions = {
   origin: [
-    'http://localhost:3000',
-    'https://chat-app-frontend.onrender.com', // ✅ Replace this too
+    'http://localhost:3000', // local frontend for dev
+    'https://encryptedchatapp.netlify.app', // ✅ your deployed frontend
   ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true,
-}));
+};
 
+// ✅ Apply CORS to Express
+app.use(cors(corsOptions));
+
+// ✅ Apply middleware
 app.use(express.json());
-
-// ✅ Route setup
 app.use('/api/auth', authRoutes);
 
-// ✅ Root route
+// ✅ Test route
 app.get('/', (req, res) => {
   res.send('✅ Chat App Backend is running!');
 });
 
-// ✅ Optional: enable detailed Mongoose logs
-mongoose.set('debug', true);
+// ✅ Setup socket.io with same CORS config
+const io = socketIo(server, {
+  cors: corsOptions,
+});
 
-// ✅ Debug log: check if MONGO_URI is loaded correctly (remove later)
-console.log('🔧 Connecting to MongoDB URI:', process.env.MONGO_URI);
-
-// ✅ MongoDB connection with longer timeout
+// ✅ Connect to MongoDB
 mongoose
   .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 20000, // wait up to 20s
-    socketTimeoutMS: 45000,          // wait up to 45s
   })
   .then(() => console.log('✅ MongoDB connected'))
   .catch((err) => console.error('❌ MongoDB connection error:', err));
 
-// ✅ Socket.io JWT auth middleware
+// ✅ Authenticate socket connections
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
-  if (!token) {
-    return next(new Error('Authentication token missing'));
-  }
+  if (!token) return next(new Error('Authentication token missing'));
 
   try {
     const user = jwt.verify(token, process.env.JWT_SECRET);
@@ -76,7 +63,7 @@ io.use((socket, next) => {
   }
 });
 
-// ✅ Socket connection handler
+// ✅ Handle socket connections
 io.on('connection', (socket) => {
   const userId = socket.user.userId;
   console.log(`✅ New client connected: ${userId}`);
@@ -88,7 +75,7 @@ io.on('connection', (socket) => {
       const message = await Message.create({
         sender: userId,
         recipient: recipientId,
-        content,
+        content, // assumed already encrypted
       });
 
       io.to(recipientId).emit('receive_message', {
@@ -96,7 +83,6 @@ io.on('connection', (socket) => {
         content,
         createdAt: message.createdAt,
       });
-
     } catch (err) {
       console.error('❌ Error sending message:', err);
     }
@@ -113,6 +99,4 @@ io.on('connection_error', (err) => {
 
 // ✅ Start server
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
