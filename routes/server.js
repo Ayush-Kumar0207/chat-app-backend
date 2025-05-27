@@ -1,4 +1,4 @@
-const express = require('express'); 
+const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const mongoose = require('mongoose');
@@ -12,34 +12,55 @@ dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
+
 const io = socketIo(server, {
   cors: {
-    origin: 'http://localhost:3000', // Update to your frontend URL on Render if deployed
+    origin: [
+      'http://localhost:3000',
+      'https://chat-app-frontend.onrender.com', // ✅ Replace with your actual frontend Render URL
+    ],
     methods: ['GET', 'POST'],
     credentials: true,
   },
 });
 
-// Middleware
-app.use(cors());
+// ✅ Enable CORS for both local and deployed frontend
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://chat-app-frontend.onrender.com', // ✅ Replace this too
+  ],
+  credentials: true,
+}));
+
 app.use(express.json());
+
+// ✅ Route setup
 app.use('/api/auth', authRoutes);
 
-// ✅ Add root route to avoid "Cannot GET /"
+// ✅ Root route
 app.get('/', (req, res) => {
   res.send('✅ Chat App Backend is running!');
 });
 
-// Connect to MongoDB
+// ✅ Optional: enable detailed Mongoose logs
+mongoose.set('debug', true);
+
+// ✅ Debug log: check if MONGO_URI is loaded correctly (remove later)
+console.log('🔧 Connecting to MongoDB URI:', process.env.MONGO_URI);
+
+// ✅ MongoDB connection with longer timeout
 mongoose
   .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 20000, // wait up to 20s
+    socketTimeoutMS: 45000,          // wait up to 45s
   })
   .then(() => console.log('✅ MongoDB connected'))
   .catch((err) => console.error('❌ MongoDB connection error:', err));
 
-// Authenticate socket connections using JWT
+// ✅ Socket.io JWT auth middleware
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
   if (!token) {
@@ -55,12 +76,11 @@ io.use((socket, next) => {
   }
 });
 
-// Handle socket events
+// ✅ Socket connection handler
 io.on('connection', (socket) => {
   const userId = socket.user.userId;
   console.log(`✅ New client connected: ${userId}`);
 
-  // Join room named by user ID
   socket.join(userId);
 
   socket.on('send_message', async ({ recipientId, content }) => {
@@ -68,10 +88,9 @@ io.on('connection', (socket) => {
       const message = await Message.create({
         sender: userId,
         recipient: recipientId,
-        content, // This should already be encrypted
+        content,
       });
 
-      // Emit to recipient's room
       io.to(recipientId).emit('receive_message', {
         senderId: userId,
         content,
@@ -88,11 +107,12 @@ io.on('connection', (socket) => {
   });
 });
 
-// Handle socket connection errors
 io.on('connection_error', (err) => {
   console.error('❌ Connection error:', err.message);
 });
 
-// Start server
+// ✅ Start server
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
